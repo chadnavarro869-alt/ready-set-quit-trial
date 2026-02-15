@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ready Set Quit — Trial</title>
+
+<style>
+:root{
+  --bg:#f6f7fb;
+  --text:#12121a;
+  --card:#ffffff;
+  --panel:#f1f3f8;
+  --border:#d8dbe6;
+  --accent:#2b6cff;
+  --danger:#e5533d;
+  --shadow:0 12px 30px rgba(0,0,0,.12);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  padding:18px;
+}
+.card{
+  max-width:520px;
+  margin:0 auto;
+  background:var(--card);
+  border-radius:16px;
+  box-shadow:var(--shadow);
+  padding:16px;
+}
+h1{margin:0 0 6px;font-size:24px}
+.sub{opacity:.7;margin:0 0 12px}
+.box{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:12px;
+  margin-bottom:12px;
+}
+.big{
+  font-size:42px;
+  font-weight:800;
+  text-align:center;
+}
+.row{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.btn{
+  flex:1;
+  padding:12px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:#000;
+  color:#fff;
+  font-weight:700;
+  cursor:pointer;
+}
+.btn.secondary{
+  background:#fff;
+  color:#000;
+}
+.btn.danger{
+  background:var(--danger);
+  color:#fff;
+}
+.locked{
+  opacity:.5;
+}
+.notice{
+  background:#eaf0ff;
+  border:1px solid #cdd9ff;
+  padding:12px;
+  border-radius:12px;
+  margin-bottom:12px;
+}
+hr{
+  border:none;
+  border-top:1px solid var(--border);
+  margin:12px 0;
+}
+.small{
+  font-size:13px;
+  opacity:.7;
+}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>Ready Set Quit — Trial</h1>
+  <p class="sub">Rule: “Later than last time.”</p>
+
+  <div class="notice">
+    <b>Free Trial:</b> <span id="trialLeft">3 days left</span><br/>
+    After the trial, unlock Pro for streaks, stats, themes, and smart timing.
+  </div>
+
+  <div class="box">
+    <div>Next window opens in</div>
+    <div class="big" id="countdown">--:--</div>
+  </div>
+
+  <div class="box">
+    <div>Today</div>
+    <div>Smoked: <b id="smoked">0</b></div>
+    <div>Avoided: <b id="avoided">0</b></div>
+  </div>
+
+  <div class="box locked">
+    <b>Pro features (locked)</b>
+    <ul>
+      <li>Streak tracking</li>
+      <li>Weekly stats</li>
+      <li>Money saved</li>
+      <li>Smart random timing</li>
+      <li>Themes</li>
+    </ul>
+  </div>
+
+  <div class="row">
+    <button class="btn" id="startBtn">Start</button>
+    <button class="btn secondary" id="waitedBtn">I waited</button>
+    <button class="btn secondary" id="smokedBtn">I smoked</button>
+  </div>
+
+  <div class="row" style="margin-top:10px">
+    <button class="btn danger" id="resetBtn">Reset day</button>
+    <button class="btn secondary" id="proBtn">Access Pro</button>
+  </div>
+
+  <hr>
+  <p class="small">
+    Trial version: simple timer only. Pro unlocks streaks, stats, and advanced control.
+  </p>
+</div>
+
+<script>
+const BASE_MINUTES = 60; // fixed timer for trial
+const stateKey = "rsq_trial_state_v1";
+const trialKey = "rsq_trial_start_v1";
+
+function loadState(){
+  const raw = localStorage.getItem(stateKey);
+  if(!raw){
+    return { running:false, nextAt:null, smoked:0, avoided:0 };
+  }
+  try{ return JSON.parse(raw); }catch{ return { running:false, nextAt:null, smoked:0, avoided:0 }; }
+}
+
+function saveState(s){
+  localStorage.setItem(stateKey, JSON.stringify(s));
+}
+
+function ensureTrialStart(){
+  let t = localStorage.getItem(trialKey);
+  if(!t){
+    t = Date.now();
+    localStorage.setItem(trialKey, String(t));
+  }
+  return Number(t);
+}
+
+function updateTrialUI(){
+  const start = ensureTrialStart();
+  const now = Date.now();
+  const threeDays = 3 * 24 * 60 * 60 * 1000;
+  const left = Math.max(0, threeDays - (now - start));
+  const days = Math.ceil(left / (24*60*60*1000));
+  document.getElementById("trialLeft").textContent = days + " day(s) left";
+}
+
+function scheduleNext(s){
+  const ms = BASE_MINUTES * 60 * 1000;
+  s.nextAt = Date.now() + ms;
+  s.running = true;
+  saveState(s);
+}
+
+function fmt(ms){
+  const t = Math.max(0, Math.floor(ms/1000));
+  const m = Math.floor(t/60);
+  const s = t%60;
+  return String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");
+}
+
+function render(){
+  updateTrialUI();
+
+  const s = state;
+  document.getElementById("smoked").textContent = s.smoked;
+  document.getElementById("avoided").textContent = s.avoided;
+
+  if(!s.running || !s.nextAt){
+    document.getElementById("countdown").textContent = "--:--";
+    return;
+  }
+  const rem = s.nextAt - Date.now();
+  if(rem <= 0){
+    document.getElementById("countdown").textContent = "00:00";
+  } else {
+    document.getElementById("countdown").textContent = fmt(rem);
+  }
+}
+
+let state = loadState();
+
+document.getElementById("startBtn").onclick = () => {
+  scheduleNext(state);
+};
+
+document.getElementById("waitedBtn").onclick = () => {
+  state.avoided++;
+  scheduleNext(state);
+};
+
+document.getElementById("smokedBtn").onclick = () => {
+  state.smoked++;
+  scheduleNext(state);
+};
+
+document.getElementById("resetBtn").onclick = () => {
+  state.smoked = 0;
+  state.avoided = 0;
+  state.running = false;
+  state.nextAt = null;
+  saveState(state);
+};
+
+document.getElementById("proBtn").onclick = () => {
+  // TODO: replace with your Pro URL
+  window.location.href = "https://chadnavarro869-alt.github.io/ready-set-quit-pro/";
+};
+
+render();
+setInterval(render, 500);
+</script>
+
+</body>
+</html>
